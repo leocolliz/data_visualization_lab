@@ -21,6 +21,7 @@ as much as living in the dearest province rather than the cheapest.
 ## Reproducing
 
 ```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python scripts/build_panel.py   # 105 weekly CSVs -> panel + qc.json  (~95 s)
 .venv/bin/python scripts/analyse.py       # the four geographic views
 .venv/bin/python scripts/figures.py       # figures 01-08
