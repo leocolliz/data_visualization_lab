@@ -34,9 +34,49 @@ cd reports && pandoc deliverable1_proposal.md -o deliverable1_proposal.pdf \
 Every threshold is a named constant in `scripts/config.py`; every excluded row
 is counted into `data/processed/qc.json` rather than dropped silently.
 
+## The interactive app
+
+```bash
+.venv/bin/streamlit run app.py            # http://localhost:8501
+```
+
+The same four comparisons, behind controls: which fuel, which weeks, and a
+province of your own. It re-implements no statistic — the charts are the
+report's own builders in `scripts/figures.py`, fed aggregates from
+`scripts/analyse.py` recomputed over the window you pick. At the full range they
+reproduce `figures/01`–`08` exactly. If the app and the report ever disagree,
+one of them is a bug.
+
+Light theme only, and deliberately: the figures are rendered for a printed
+report and their palette is validated against that one surface, so a dark UI
+would put light-surface PNGs on a dark page rather than restyle them.
+
+## Docker
+
+```bash
+docker compose up --build                 # the app on http://localhost:8501
+docker compose run --rm pipeline          # rebuild panel, aggregates, figures
+docker compose down
+```
+
+Both services are the same image; the pipeline one is behind a profile so
+`up` starts the app alone. `data/` is deliberately not baked in — 856 MB of raw
+extracts, gitignored besides — so it is bind-mounted instead: read-only for the
+app, read-write for the pipeline. Build the panel once and every container sees
+it.
+
+The image runs as uid 1000, which is the first ordinary user on a typical Linux
+host, so files the pipeline writes back into `data/` and `figures/` are owned by
+you rather than by root. If your uid differs (`id -u`), set `user:` on the
+service. `pyarrow` is held at 24.x because streamlit 1.61 excludes 25; the
+parquet files read identically either way.
+
 ## Layout
 
 ```
+app.py       the interactive app (Streamlit)
+Dockerfile, docker-compose.yml, .dockerignore, .streamlit/
+             container image, the two services, and the app's theme
 scripts/     config, fuel harmonisation, registry/geo, pipeline, figures
 data/raw/    prices/ (105 weekly CSVs), registry/ (8 snapshots),
              provinces.geojson, quarterly .tar.gz archives (provenance)

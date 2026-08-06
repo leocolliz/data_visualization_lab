@@ -1,0 +1,34 @@
+# Two services from one image:
+#
+#   docker compose up --build            the app on http://localhost:8501
+#   docker compose run --rm pipeline     rebuild panel, aggregates and figures
+#   docker compose down                  stop and remove
+#
+services:
+  app:
+    build: .
+    image: where-you-refuel:latest
+    container_name: where-you-refuel
+    ports:
+      # HOST:CONTAINER. Change only the left-hand side if 8501 is taken.
+      - "8501:8501"
+    volumes:
+      # A bind mount, not a copy: the panel stays on the host, and rerunning the
+      # pipeline is visible to the app on the next rerun. Read-only because the
+      # app only ever reads it.
+      - ./data:/app/data:ro
+
+  # The batch side of the project. Same image, no port, and the mounts are
+  # writable because this is the service that regenerates the outputs.
+  # Kept behind a profile so `docker compose up` starts the app alone.
+  pipeline:
+    build: .
+    image: where-you-refuel:latest
+    profiles: ["tools"]
+    volumes:
+      - ./data:/app/data
+      - ./figures:/app/figures
+    command: >
+      sh -c "python scripts/build_panel.py &&
+             python scripts/analyse.py &&
+             python scripts/figures.py"

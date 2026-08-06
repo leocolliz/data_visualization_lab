@@ -1,0 +1,25 @@
+# The app wears the same tokens as the figures (scripts/style.py), so a
+# matplotlib PNG sits on the page without a visible seam between chart surface
+# and page surface.
+#
+# Light only, on purpose. The figures are rendered for a printed report and
+# their palette was validated against this one surface; a dark UI would put
+# light-surface PNGs on a dark page rather than restyle them, and the honest fix
+# is a second set of validated dark steps, not an automatic flip.
+
+[theme]
+base = "light"
+primaryColor = "#2a78d6"            # style.C1
+backgroundColor = "#fcfcfb"         # style.SURFACE
+secondaryBackgroundColor = "#f0efec"  # the neutral midpoint of style.DIVERGING
+textColor = "#0b0b0b"               # style.INK
+font = "sans serif"
+
+[server]
+headless = true
+# Never walk the bind-mounted data directory looking for source changes: it is
+# 856 MB and none of it is code.
+folderWatchBlacklist = ["/app/data", "/app/figures", "data", "figures"]
+
+[browser]
+gatherUsageStats = false

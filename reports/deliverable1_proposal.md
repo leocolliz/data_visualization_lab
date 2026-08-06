@@ -52,13 +52,12 @@ An **interactive scrollytelling piece on the web**, desktop-first but
 responsive. The argument is sequential - the reader has to believe the
 provincial map before it can be undercut - which favours a scrolled narrative;
 but the question is also personal, which favours an explorable view. A narrative
-that opens into an explorer at the end serves both. Fuel prices are read on
-phones near a pump, so mobile cannot be an afterthought. A static infographic is
-the fallback: the argument would survive, the personal lookup would not.
+that opens into an explorer at the end serves both.
 
 ### 1.3 Purpose
 
-Primarily **to explain**, secondarily **to compare**. The intended takeaways, in order:
+Primarily **to explain**, secondarily **to compare**. A feasibility pass over the
+2024–2025 extracts suggests three takeaways, in order:
 
 1. Provincial fuel prices in Nord-Est really do differ, by about nine cents a
    litre between the cheapest and the dearest.
@@ -71,7 +70,10 @@ Primarily **to explain**, secondarily **to compare**. The intended takeaways, in
 
 The reversal in point 2 is the reason the project is worth doing rather than
 merely worth plotting. It takes a belief the reader arrives with and replaces
-it with a more useful one.
+it with a more useful one. These magnitudes are provisional until the full
+cleaning in Deliverable 2; the final solution will report the evidence found
+rather than force these hypotheses, and any departure from this proposal will be
+documented in the later deliverables.
 
 ## 2. Project Data
 
@@ -92,20 +94,23 @@ surfaced issues that make cleaning a first-class part of the work: the fuel-name
 field is free text with 59 commercial variants; methane and LNG are priced per
 kilogram and cannot be pooled with per-litre fuels; the field separator differs
 between the archive and the live feed; and some registry rows carry separators
-inside the station name. None is a blocker; all are documented in Deliverable 2.
+inside the station name. None is a blocker; all will be documented in Deliverable 2.
 
 **Known limitations.** These are *posted* prices, self-reported by operators -
 not transaction prices, and not weighted by how much fuel each station sells, so
 a station counts as much as its neighbour regardless of throughput.
 Friuli-Venezia Giulia operates a regional discount for residents that posted
-prices do not reflect.
+prices do not reflect. Station coordinates in the registry may also carry errors,
+which matters for a map and will be validated against province boundaries.
 
 **Scope.** Nord-Est (ISTAT NUTS-1: Trentino-Alto Adige, Veneto,
 Friuli-Venezia Giulia, Emilia-Romagna - 22 provinces, ~5,300 stations), over
 2024–2025, sampled one day per week. Tractable, while preserving the variation
 the question needs: Alpine, plain, coastal and border provinces, dense motorway
 corridors and rural areas. Weekly sampling costs nothing, because the question
-is geographic rather than dynamic.
+is geographic rather than dynamic - though we will check that the main patterns
+hold across different weekdays rather than assuming the sampled day is
+representative.
 
 ## 3. Project Definition
 
@@ -156,11 +161,14 @@ that would otherwise masquerade as geography.
 ### 3.3 Highlighting key features
 
 - **Colour by job.** Diverging for deviation from a mean, one hue for magnitude,
-  a fixed categorical order elsewhere. The palette is validated for
-  colour-blind separation with a script, not eyeballed.
+  a fixed categorical order elsewhere. 
 - **Annotation over legend.** The comparison that carries the argument - the
   between-province range against the within-province spread - is stated in
   words on the chart itself, not left for the reader to compute.
+- **Cents into money the reader spends.** Every headline gap is labelled twice:
+  in cents per litre, and as the difference on a typical 50-litre refill. A
+  reader who has no feel for "nine cents a litre" has a very clear feel for
+  "four and a half euros a tank", and it costs one line of text.
 - **Ordering as encoding.** Provinces ranked by value, never alphabetically.
 - **Layering for clutter.** 5,300 stations are aggregated to province and
   revealed only on selection.
@@ -174,13 +182,17 @@ it is a claim about two dispersions. Making that legible to a reader who does
 not know what a percentile is - without dumbing it down or hiding behind a box
 plot - is the central design problem.
 
-**Bimodal effects resist a single number.** Roughly a third of stations post the
-same price for attended and self-service; the rest charge around twenty cents.
-A mean over that mixture describes almost no actual station, so the figure has
-to show the shape, not the average.
-
 **Small motorway sample.** 105 motorway stations against 5,224 ordinary ones is
-an unbalanced comparison; medians rather than means, and stating the sample
-size, are the mitigation.
+an unbalanced comparison - and of those 105, only around 100 report prices in a
+given week. Medians rather than means, and stating the sample size, are the
+mitigation.
 
 ![Low-fidelity wireframe of the proposed solution.](../figures/09_wireframe.png){width=88%}
+
+## Data Sources
+
+- MIMIT, *Carburanti - Archivio storico dei prezzi praticati e dell'anagrafica
+  degli impianti*:
+  <https://www.mimit.gov.it/it/open-data/elenco-dataset/carburanti-archivio-prezzi>
+- Openpolis, *Italian administrative boundaries*:
+  <https://github.com/openpolis/geojson-italy>

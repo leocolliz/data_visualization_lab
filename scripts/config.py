@@ -40,6 +40,13 @@ NE_PROVINCES = {p: r for r, ps in NE_REGIONS.items() for p in ps}
 # Bounding box for Nord-Est, used only to flag implausible geocodes.
 NE_BBOX = (9.0, 43.6, 14.0, 47.2)  # lon_min, lat_min, lon_max, lat_max
 
+# --- Reader-facing units --------------------------------------------------
+# Deliverable 1 commits to labelling every headline gap twice: in cents per
+# litre, and as the same gap on a typical refill. A reader with no feel for
+# "nine cents a litre" has a very clear feel for "four and a half euros a tank".
+TANK_LITRES = 50
+
+
 # --- Data quality thresholds ---------------------------------------------
 # Posted prices below/above these are treated as data entry errors, not prices.
 # The live feed contains values like 0.100 and 8.888 that are plainly not

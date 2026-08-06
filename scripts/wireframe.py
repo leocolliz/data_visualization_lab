@@ -40,7 +40,7 @@ def main():
     ax.grid(False)
 
     box(ax, 0.02, 0.905, 0.96, 0.082,
-        "Quanto costa davvero un litro qui?",
+        "What does a litre really cost here?",
         "Scrollytelling header — hero figure: the cents/litre you lose by "
         "picking the wrong pump", accent=True)
 

@@ -1,0 +1,15 @@
+# Keep the build context small: everything here is either regenerated, huge, or
+# irrelevant to running the app.
+data/
+figures/
+reports/
+_archive_*/
+.venv/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.env
+.DS_Store
+README.md

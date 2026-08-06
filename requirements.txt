@@ -3,4 +3,9 @@
 pandas==3.0.5
 numpy==2.5.1
 matplotlib==3.11.1
-pyarrow==25.0.0     # parquet engine for the interim panel
+pyarrow==24.0.0     # parquet engine for the interim panel; held below 25.0.0,
+                    #   which streamlit 1.61 excludes (pyarrow<25). The parquet
+                    #   files read identically either way.
+streamlit==1.61.1   # the interactive app: streamlit run app.py
+altair==6.2.2       # ships with streamlit; imported directly for the station
+                    #   strip plot, so it is pinned rather than left implicit

@@ -36,6 +36,13 @@ PROD_LIGHT = {"benzina": "#9ec5f4", "gasolio": "#f6bda6"}
 
 
 def _load():
+    """Everything the figures draw from, read once.
+
+    Each `fig_*` below takes this dict and *returns* a figure; writing the PNG
+    is `main`'s job. Keeping the two apart is what lets `app.py` hand the same
+    functions a live recomputation over a user-chosen window and render the
+    result to the screen instead of to disk.
+    """
     return {
         "dev": pd.read_csv(config.PROCESSED / "province_deviation.csv"),
         "mw": pd.read_csv(config.PROCESSED / "motorway_weekly.csv",
@@ -44,6 +51,13 @@ def _load():
         "svc": pd.read_csv(config.PROCESSED / "service_gap.csv"),
         "qc": json.load(open(config.PROCESSED / "qc.json")),
         "qcw": pd.read_csv(config.PROCESSED / "qc_weekly.csv", parse_dates=["date"]),
+        # The panel backs the two distribution figures; only these columns are
+        # ever read, so the rest of it stays off the heap.
+        "panel": pd.read_parquet(
+            config.INTERIM / "panel_ne.parquet",
+            columns=["product", "self", "motorway", "prezzo", "geo_ok", "age_days"]),
+        "pairs": {p: pd.read_parquet(config.INTERIM / f"service_pairs_{p}.parquet")
+                  for p in fuels.HEADLINE},
     }
 
 
@@ -81,12 +95,11 @@ def fig_coverage(D):
     style.titles(ax, "Quotes stay fresh", "Median age of the posted price")
 
     style.source_note(fig)
-    style.save(fig, "01_coverage.png")
+    return fig
 
 
 def fig_quality(D):
-    panel = pd.read_parquet(config.INTERIM / "panel_ne.parquet",
-                            columns=["prezzo", "age_days", "product"])
+    panel = D["panel"]
     fig, axes = plt.subplots(1, 2, figsize=(11.5, 3.9))
     fig.subplots_adjust(wspace=0.30, top=0.78)
 
@@ -124,7 +137,7 @@ def fig_quality(D):
 
     style.source_note(fig, "Operators must report price changes, not reconfirm "
                            "unchanged prices, so age alone is not staleness.")
-    style.save(fig, "02_quality.png")
+    return fig
 
 
 def fig_harmonisation(D):
@@ -163,7 +176,7 @@ def fig_harmonisation(D):
 
     style.source_note(fig, "Methane, LNG and L-GNC are priced per kilogram and "
                            "are excluded from every EUR/litre view.")
-    style.save(fig, "03_harmonisation.png")
+    return fig
 
 
 # --------------------------------------------------------------------------
@@ -236,14 +249,12 @@ def fig_choropleth(D, product="benzina"):
 
     style.source_note(fig, "Friuli-Venezia Giulia operates a regional discount "
                            "for residents that posted prices do not reflect.")
-    style.save(fig, "04_choropleth.png")
+    return fig
 
 
 def fig_motorway(D):
     mw = D["mw"]
-    panel = pd.read_parquet(
-        config.INTERIM / "panel_ne.parquet",
-        columns=["product", "self", "motorway", "prezzo", "geo_ok"])
+    panel = D["panel"]
     panel = panel[panel["geo_ok"] & panel["self"]]
 
     fig = plt.figure(figsize=(12.4, 4.2))
@@ -292,7 +303,7 @@ def fig_motorway(D):
         fig, f"{D['qc']['registry']['motorway']} motorway stations of "
              f"{D['qc']['registry']['stations_ne']:,}. "
              f"Spikes are round-number pricing.")
-    style.save(fig, "05_motorway.png")
+    return fig
 
 
 def fig_dispersion(D, product="benzina"):
@@ -346,13 +357,13 @@ def fig_dispersion(D, product="benzina"):
 
     style.source_note(fig, "Spread computed within each week, then averaged, so "
                            "it is not inflated by prices moving over time.")
-    style.save(fig, "06_dispersion.png")
+    return fig
 
 
 def fig_service(D, product="benzina"):
     svc = D["svc"][D["svc"]["product"] == product].set_index("Provincia")
     dev = D["dev"][D["dev"]["product"] == product].set_index("Provincia")
-    pairs = pd.read_parquet(config.INTERIM / f"service_pairs_{product}.parquet")
+    pairs = D["pairs"][product]
     gap = pairs["gap_cents"]
     zero_pct = float((gap.abs() < 0.5).mean() * 100)
     diff = gap[gap > 0.5]
@@ -385,15 +396,21 @@ def fig_service(D, product="benzina"):
     ], loc="lower right", ncols=2)
 
     ax = axes[1]
-    ax.hist(gap.clip(-2, 45), bins=95, color=style.SEQ[4], edgecolor="none")
+    counts, edges, _ = ax.hist(gap.clip(-2, 45), bins=95, color=style.SEQ[4],
+                               edgecolor="none")
     ax.set_yscale("log")
     ax.set_xlabel("attended minus self-service, cents / litre")
     ax.set_ylabel("station-weeks (log)")
     style.titles(ax, "A third of stations charge nothing extra",
                  f"Mean {gap.mean():.1f}c over all pairs · "
                  f"{diff.mean():.1f}c where a differential exists")
+    # Anchored to the measured height of the zero bin rather than a literal, so
+    # the leader line still lands on the bar when the window is recomputed.
+    zero_bin = max(int(np.searchsorted(edges, 0.0, side="right")) - 1, 0)
+    peak = max(counts[zero_bin], 1.0)
     ax.annotate(f"{zero_pct:.0f}% of paired\nstation-weeks\nsit at zero",
-                xy=(0.6, 76081), xytext=(9, 40000),
+                xy=((edges[zero_bin] + edges[zero_bin + 1]) / 2, peak),
+                xytext=(9, peak * 0.53),
                 fontsize=9, color=style.INK_2,
                 arrowprops=dict(arrowstyle="-", color=style.MUTED, lw=0.9))
 
@@ -401,14 +418,14 @@ def fig_service(D, product="benzina"):
         fig, f"{len(pairs):,} paired station-weeks at "
              f"{pairs['idImpianto'].nunique():,} stations. Only stations posting "
              f"both prices for the same product in the same week contribute.")
-    style.save(fig, "07_service.png")
+    return fig
 
 
 def fig_synthesis(D, product="benzina"):
     dev = D["dev"][D["dev"]["product"] == product]
     disp = D["disp"][D["disp"]["product"] == product]
     mw = D["mw"][D["mw"]["product"] == product]
-    pairs = pd.read_parquet(config.INTERIM / f"service_pairs_{product}.parquet")
+    pairs = D["pairs"][product]
 
     items = [
         ("Cheapest vs dearest\nprovince",
@@ -429,10 +446,14 @@ def fig_synthesis(D, product="benzina"):
     ax.set_yticks(y, labels)
     ax.grid(axis="y", visible=False)
     ax.set_xlabel("cents / litre")
-    ax.set_xlim(0, max(vals) * 1.16)
+    ax.set_xlim(0, max(vals) * 1.36)
+    # Labelled twice, in cents and in money: the gap a reader can feel is the
+    # one on the tank they actually buy, not the one per litre.
     for i, v in enumerate(vals):
         ax.text(v + 0.22, i, f"{v:.1f}c", va="center", fontsize=10,
                 color=style.INK_2)
+        ax.text(v + 2.15, i, f"€{v * config.TANK_LITRES / 100:.2f} a tank",
+                va="center", fontsize=9.5, color=style.MUTED)
     style.titles(ax, "Which pump you choose matters more than which province "
                      "you are in",
                  f"Self-service {fuels.DISPLAY[product].lower()}, Nord-Est, "
@@ -440,20 +461,29 @@ def fig_synthesis(D, product="benzina"):
 
     style.source_note(fig, "Each bar is a different comparison on the same "
                            "scale: a range across provinces, a within-province "
-                           "spread, and two paired premiums.")
-    style.save(fig, "08_synthesis.png")
+                           "spread, and two paired premiums. Euro figures are "
+                           f"the same gap on a {config.TANK_LITRES}-litre refill.")
+    return fig
+
+
+# Filename -> builder. The report renders each one at its default product;
+# `app.py` walks the same table to offer diesel as well as petrol.
+SHEET = [
+    ("01_coverage.png", fig_coverage),
+    ("02_quality.png", fig_quality),
+    ("03_harmonisation.png", fig_harmonisation),
+    ("04_choropleth.png", fig_choropleth),
+    ("05_motorway.png", fig_motorway),
+    ("06_dispersion.png", fig_dispersion),
+    ("07_service.png", fig_service),
+    ("08_synthesis.png", fig_synthesis),
+]
 
 
 def main():
     D = _load()
-    fig_coverage(D)
-    fig_quality(D)
-    fig_harmonisation(D)
-    fig_choropleth(D)
-    fig_motorway(D)
-    fig_dispersion(D)
-    fig_service(D)
-    fig_synthesis(D)
+    for name, build in SHEET:
+        style.save(build(D), name)
 
 
 if __name__ == "__main__":

@@ -26,6 +26,16 @@ import fuels
 CENTS = 100.0
 
 
+def _concat(frames, columns):
+    """Concatenate per-product results, tolerating a window that yields none.
+
+    The app calls these functions on arbitrary date slices, where a product can
+    legitimately have no comparable rows. An empty frame with the right columns
+    keeps the caller's column access working.
+    """
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=columns)
+
+
 def load_panel():
     panel = pd.read_parquet(config.INTERIM / "panel_ne.parquet")
     # Every view below is per-litre and geographic, so drop the handful of
@@ -76,7 +86,7 @@ def motorway_weekly(panel):
             "ordinary": g[False].to_numpy(),
             "premium_cents": (g[True] - g[False]).to_numpy() * CENTS,
         }))
-    return pd.concat(out, ignore_index=True)
+    return _concat(out, ["date", "product", "motorway", "ordinary", "premium_cents"])
 
 
 def dispersion(panel):
@@ -111,6 +121,25 @@ def dispersion(panel):
     return pd.concat(out, ignore_index=True)
 
 
+def service_pairs(panel, product):
+    """Station-week pairs where one station posted both prices for `product`.
+
+    One row per station-week, carrying the attended-minus-self gap. Returns
+    None if the window holds only one of the two service types. This is the
+    station-level distribution behind the headline figure; `service_gap`
+    aggregates it by province.
+    """
+    d = panel[panel["product"] == product]
+    sw = (d.groupby(["date", "Provincia", "idImpianto", "self"], observed=True)
+          ["prezzo"].mean().unstack("self"))
+    if True not in sw.columns or False not in sw.columns:
+        return None
+    paired = sw.dropna()
+    paired = paired.assign(gap_cents=(paired[False] - paired[True]) * CENTS)
+    return (paired.reset_index()[["date", "Provincia", "idImpianto", "gap_cents"]]
+            .assign(product=product))
+
+
 def service_gap(panel):
     """Attended-service premium, measured within the same station and week.
 
@@ -120,14 +149,9 @@ def service_gap(panel):
     """
     out = []
     for product in fuels.HEADLINE:
-        d = panel[panel["product"] == product]
-        sw = (d.groupby(["date", "Provincia", "idImpianto", "self"], observed=True)
-              ["prezzo"].mean().unstack("self"))
-        if True not in sw.columns or False not in sw.columns:
+        pr = service_pairs(panel, product)
+        if pr is None:
             continue
-        paired = sw.dropna()
-        paired = paired.assign(gap_cents=(paired[False] - paired[True]) * CENTS)
-        pr = paired.reset_index()
         agg = pr.groupby("Provincia").agg(
             gap_cents=("gap_cents", "mean"),
             gap_median=("gap_cents", "median"),
@@ -136,11 +160,8 @@ def service_gap(panel):
         ).reset_index()
         agg["product"] = product
         out.append(agg)
-        # Also keep the station-level distribution for the headline figure.
-        pr[["date", "Provincia", "idImpianto", "gap_cents"]].assign(
-            product=product
-        ).to_parquet(config.INTERIM / f"service_pairs_{product}.parquet", index=False)
-    return pd.concat(out, ignore_index=True)
+    return _concat(out, ["Provincia", "gap_cents", "gap_median", "n_pairs",
+                         "n_stations", "product"])
 
 
 def main():
@@ -156,6 +177,13 @@ def main():
     mw.to_csv(config.PROCESSED / "motorway_weekly.csv", index=False)
     disp.to_csv(config.PROCESSED / "dispersion.csv", index=False)
     svc.to_csv(config.PROCESSED / "service_gap.csv", index=False)
+
+    # The station-level pair distribution, kept for the headline figure.
+    for product in fuels.HEADLINE:
+        pr = service_pairs(panel, product)
+        if pr is not None:
+            pr.to_parquet(config.INTERIM / f"service_pairs_{product}.parquet",
+                          index=False)
 
     for product in fuels.HEADLINE:
         p = dev[dev["product"] == product].sort_values("dev_cents")
