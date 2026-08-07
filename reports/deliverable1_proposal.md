@@ -1,8 +1,8 @@
 ---
 title: "Where You Refuel"
-subtitle: "The geography of pump prices in North-East Italy - a data visualization proposal"
-author: "Data Visualization · Deliverable 1 · Project Proposal"
-date: "Nord-Est Italy, 2024–2025"
+subtitle: "The geography of pump prices in North-East Italy"
+author: "Massimo Cherotti · Leonardo Collizzolli · Giovanni Divina"
+date: "Data Visualization · Lab Project Proposal"
 geometry: margin=2.4cm
 fontsize: 11pt
 linestretch: 1.05

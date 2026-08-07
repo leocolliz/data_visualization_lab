@@ -1,8 +1,8 @@
 ---
-title: "Where You Refuel — Technical Report"
+title: "Where You Refuel"
 subtitle: "Dataset description, exploratory analysis and data quality assessment"
-author: "Data Visualization · Deliverable 2"
-date: "MIMIT Osservaprezzi Carburanti · Nord-Est Italy · 2024–2025"
+author: "Massimo Cherotti · Leonardo Collizzolli · Giovanni Divina"
+date: "Data Visualization · Technical report"
 geometry: margin=2.3cm
 fontsize: 10pt
 linestretch: 1.03
@@ -12,8 +12,8 @@ urlcolor: "blue"
 
 ## 1. Scope and purpose
 
-This report documents the data behind a single question — *how much does where
-you refuel change what you pay?* — restricted to the 22 provinces of ISTAT
+This report documents the data behind a single question - *how much does where
+you refuel change what you pay?* - restricted to the 22 provinces of ISTAT
 NUTS-1 **Nord-Est** (Trentino-Alto Adige, Veneto, Friuli-Venezia Giulia,
 Emilia-Romagna) over **2024–2025**, sampled **one day per week (Monday)**.
 
@@ -31,8 +31,8 @@ structural.
 
 | Source | Content | Licence |
 |---|---|---|
-| MIMIT *Carburanti — archivio storico prezzi* | daily station prices, quarterly `.tar.gz`, 2015 Q1– | IODL 2.0 |
-| MIMIT *Carburanti — anagrafica impianti attivi* | station registry with coordinates | IODL 2.0 |
+| MIMIT *Carburanti - archivio storico prezzi* | daily station prices, quarterly `.tar.gz`, 2015 Q1– | IODL 2.0 |
+| MIMIT *Carburanti - anagrafica impianti attivi* | station registry with coordinates | IODL 2.0 |
 | openpolis/geojson-italy | province boundaries (ISTAT-derived) | CC-BY |
 
 Prices are reported to the Ministry by operators under art. 51 of Law 99/2009.
@@ -45,7 +45,7 @@ copies. All five matched byte-for-byte.
 
 ## 3. Structure of the raw data
 
-**Prices** (`prezzo_alle_8-YYYYMMDD.csv`) — line 1 is a free-text extraction
+**Prices** (`prezzo_alle_8-YYYYMMDD.csv`) - line 1 is a free-text extraction
 stamp, line 2 the header, delimiter `;`:
 
 | Field | Type | Notes |
@@ -56,7 +56,7 @@ stamp, line 2 the header, delimiter `;`:
 | `isSelf` | 0/1 | 1 = self-service, 0 = attended |
 | `dtComu` | datetime | when the operator filed this price |
 
-**Registry** (`anagrafica_impianti_attivi-YYYYMMDD.csv`) — same two-line
+**Registry** (`anagrafica_impianti_attivi-YYYYMMDD.csv`) - same two-line
 preamble, delimiter `;`, ten fields: `idImpianto`, `Gestore`, `Bandiera`,
 `Tipo Impianto`, `Nome Impianto`, `Indirizzo`, `Comune`, `Provincia`,
 `Latitudine`, `Longitudine`. `Tipo Impianto` is a clean binary in this period:
@@ -70,14 +70,14 @@ national rows over the two years.
 
 The pipeline (`scripts/`, ~600 lines of Python) runs in five stages:
 
-1. **`geo.load_registry`** — parse all eight snapshots, restrict to Nord-Est,
+1. **`geo.load_registry`** - parse all eight snapshots, restrict to Nord-Est,
    derive region, motorway flag, harmonised brand, and a geocode validity flag;
    take the union across snapshots keeping the most recent record per station.
-2. **`build_panel`** — read the 105 weekly price files, join the registry,
+2. **`build_panel`** - read the 105 weekly price files, join the registry,
    harmonise fuel labels, apply the documented filters, and write the panel plus
    a machine-readable QC record (`data/processed/qc.json`).
-3. **`analyse`** — compute the four geographic views.
-4. **`figures`** / **`wireframe`** — render.
+3. **`analyse`** - compute the four geographic views.
+4. **`figures`** / **`wireframe`** - render.
 
 Two methodological rules are applied throughout, because both guard against
 composition effects that would otherwise be mistaken for geography:
@@ -95,7 +95,7 @@ composition effects that would otherwise be mistaken for geography:
 All 105 expected Mondays are present; none is missing. Between 4,301 and 4,439
 Nord-Est stations post at least one price in any given week, out of 5,329
 registered. Over the whole period **5,018 stations report at least once**, so
-**311 registered stations (5.8%) are never observed quoting a price** — they are
+**311 registered stations (5.8%) are never observed quoting a price** - they are
 listed as active but silent. This is a real limitation: the "provincial mean" is
 a mean over stations that report, not over stations that exist.
 
@@ -110,12 +110,12 @@ well-behaved, with pronounced spikes at round numbers (1.700, 1.800, 1.900) that
 are a genuine pricing behaviour rather than a defect.
 
 For context, the *live* feed downloaded on 2026-08-04 carries values of 0.100
-and 8.888 — placeholders rather than prices. The band is set to catch exactly
+and 8.888 - placeholders rather than prices. The band is set to catch exactly
 these without touching any real fuel price.
 
 ![Price plausibility and the age of quotes.](../figures/02_quality.png)
 
-### 5.3 Quote age — and a regime change in the archive
+### 5.3 Quote age - and a regime change in the archive
 
 Operators are required to report price *changes*, not to reconfirm unchanged
 prices, so an old `dtComu` is **not by itself evidence of a stale record**. We
@@ -147,7 +147,7 @@ implied exclusion rate was implausible.
 
 `descCarburante` is free text. Across the study period it takes **59 distinct
 values** (56 after case-folding) for what are really **nine products**. Diesel
-alone appears under 20 commercial names — `Blue Diesel`, `Hi-Q Diesel`,
+alone appears under 20 commercial names - `Blue Diesel`, `Hi-Q Diesel`,
 `Supreme Diesel`, `Excellium Diesel`, `Gasolio Oro Diesel`, and so on.
 
 Harmonisation is an explicit lookup table (`fuels.py`), not a fuzzy rule, so an
@@ -180,7 +180,7 @@ incompatibility rather than a quality failure.
   a Nord-Est bounding box or sit at (0,0). They are excluded from spatial views.
 - **Churn.** 4,267 of 5,329 stations appear in all eight snapshots; 225 appear in
   only one. Because a single snapshot cannot resolve every id, the registry is
-  built as a union across snapshots — using only the latest snapshot would have
+  built as a union across snapshots - using only the latest snapshot would have
   silently dropped historical stations.
 - **Rebranding.** 58 stations change `Bandiera` during the period. Brand is
   therefore a property of the *latest* record, and brand-level comparisons
@@ -201,7 +201,7 @@ incompatibility rather than a quality failure.
 
 ## 6. Exploratory analysis
 
-The panel covers 5,008 geolocated stations that reported at least once — 101 of
+The panel covers 5,008 geolocated stations that reported at least once - 101 of
 them on the motorway. Composition: Veneto 2,241 stations, Emilia-Romagna 2,065,
 Friuli-Venezia Giulia 587, Trentino-Alto Adige 436; by brand, Eni 1,153,
 IP 751, unbranded *pompe bianche* 622, Q8 562, Esso 496, Tamoil 324, Shell 26,
@@ -212,7 +212,7 @@ every station sells and therefore the only ones comparable across 5,000 pumps.
 
 ### 6.1 Between provinces
 
-Mean self-service petrol ranges from **€1.745 in Rovigo to €1.833 in Bolzano** —
+Mean self-service petrol ranges from **€1.745 in Rovigo to €1.833 in Bolzano** -
 a spread of **8.8 cents**. Diesel behaves similarly (€1.660 to €1.758, 9.8
 cents). The pattern is coherent rather than noisy: Alpine and border provinces
 (BZ, TN, TS, GO) are dear, the Po plain (RO, TV, PD, FE) is cheap.
@@ -224,15 +224,15 @@ cents). The pattern is coherent rather than noisy: Alpine and border provinces
 The motorway premium averages **10.4 cents** for petrol and **11.6** for diesel,
 and never closes: the weekly minimum across two years is 7.4 cents. The two
 populations are almost disjoint in the distribution plot. Note the small sample
-— 101 reporting motorway stations against ~4,900 ordinary — which is why medians
+- 101 reporting motorway stations against ~4,900 ordinary - which is why medians
 are used throughout.
 
 ![The motorway premium, and the two price populations.](../figures/05_motorway.png)
 
-### 6.3 Within provinces — the result that reframes the question
+### 6.3 Within provinces - the result that reframes the question
 
 Within a single province and a single week, the 10th–90th percentile of station
-prices spans **9.1 cents on average** — *as wide as the entire 8.8-cent range
+prices spans **9.1 cents on average** - *as wide as the entire 8.8-cent range
 between the cheapest and dearest province*. Bologna is the most dispersed
 (11.8c), Bolzano the least (6.0c): Bolzano is uniformly expensive, whereas
 Bologna contains both cheap and dear pumps.
@@ -247,7 +247,7 @@ more accurate and more actionable.
 ### 6.4 Attended versus self-service
 
 Measured within station and week, across **240,347 paired station-weeks at 2,785
-stations**, attended service costs **13.0 cents** more on average — larger than
+stations**, attended service costs **13.0 cents** more on average - larger than
 any other gap in the study.
 
 That mean, however, describes almost no real station. The distribution is
@@ -299,8 +299,3 @@ order regenerates every number and figure in this report from the raw CSVs.
 Every threshold is a named constant in `config.py`; every exclusion is counted
 into `data/processed/qc.json` rather than applied silently. Environment: Python
 3.12, pandas 3.0.5, matplotlib 3.11.1, numpy 2.5.1, pyarrow 25.0.0.
-
-The chart palette is the validated reference palette from the course's
-visualization guidance; the two-series categorical pair was checked
-programmatically for colour-blind separation on the light surface (worst
-adjacent CVD ΔE 24.7 protan, normal-vision ΔE 33.6) rather than by eye.
