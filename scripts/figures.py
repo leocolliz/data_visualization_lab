@@ -124,14 +124,14 @@ def fig_quality(D):
     ax.set_xlim(0, 62)
     ax.set_xlabel("age of the quote, days")
     ax.set_ylabel("posted prices (log)")
-    style.titles(ax, "Nothing older than 61 days",
+    style.titles(ax, f"Nothing older than {D['qc']['panel']['age_max']} days",
                  f"Median {D['qc']['panel']['age_median']:.0f} d · "
                  f"99th pct 13 d · max {D['qc']['panel']['age_max']} d")
     ax.annotate("In 2024–2025 the archive holds no quote\n"
-                "older than 61 days. The same extract for\n"
-                "March 2022 reaches 568 days, and the live\n"
-                "feed today reaches 4,821 — the retention\n"
-                "behaviour of the feed changed over time.",
+                "older than 61 days, and only 26 rows\n"
+                "cross 60. The March 2022 extract reaches\n"
+                "568 days and the live feed 4,823 — the\n"
+                "retention behaviour changed over time.",
                 xy=(0.97, 0.93), xycoords="axes fraction", ha="right", va="top",
                 fontsize=8.5, color=style.INK_2)
 

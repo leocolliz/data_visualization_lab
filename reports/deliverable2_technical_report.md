@@ -8,6 +8,8 @@ fontsize: 10pt
 linestretch: 1.03
 colorlinks: true
 urlcolor: "blue"
+header-includes:
+  - \usepackage{needspace}
 ---
 
 ## 1. Scope and purpose
@@ -27,6 +29,10 @@ internally consistent in a way the full 2015–2026 archive is not.
 real difficulties are semantic (free-text fuel names, mixed units) rather than
 structural.
 
+Sections 2–5 describe the data and assess its quality. Section 6 reports what
+exploration established about whether the data can carry the intended
+visualization, and which of its properties constrain the design.
+
 ## 2. Sources and provenance
 
 | Source | Content | Licence |
@@ -35,13 +41,8 @@ structural.
 | MIMIT *Carburanti - anagrafica impianti attivi* | station registry with coordinates | IODL 2.0 |
 | openpolis/geojson-italy | province boundaries (ISTAT-derived) | CC-BY |
 
-Prices are reported to the Ministry by operators under art. 51 of Law 99/2009.
-Each daily file is an extract of the prices valid at 08:00. Archive URLs follow
+Prices are reported to the Ministry by operators and each daily file is an extract of the prices valid at 08:00. Archive URLs follow
 `opendatacarburanti.mise.gov.it/categorized/{dataset}/{year}/{year}_{q}_tr.tar.gz`.
-
-**Verification.** Five of the 105 weekly price files were re-extracted from
-freshly downloaded quarterly archives and compared by MD5 against the working
-copies. All five matched byte-for-byte.
 
 ## 3. Structure of the raw data
 
@@ -59,10 +60,10 @@ stamp, line 2 the header, delimiter `;`:
 **Registry** (`anagrafica_impianti_attivi-YYYYMMDD.csv`) - same two-line
 preamble, delimiter `;`, ten fields: `idImpianto`, `Gestore`, `Bandiera`,
 `Tipo Impianto`, `Nome Impianto`, `Indirizzo`, `Comune`, `Provincia`,
-`Latitudine`, `Longitudine`. `Tipo Impianto` is a clean binary in this period:
-`Stradale` or `Autostradale`.
+`Latitudine`, `Longitudine`. `Tipo Impianto` takes two values, `Stradale` or
+`Autostradale` - a controlled vocabulary the parser relies on (§5.5).
 
-A national daily file holds ~93,000 price rows across ~24,000 stations. Eight
+A national daily file holds ~93,000 price rows across ~24,000 stations. Even thought registry are published everyday with the prices file, since the number of stations is not often changing eight
 registry snapshots were taken, one per quarter, growing from 22,821 to 24,462
 national rows over the two years.
 
@@ -77,7 +78,8 @@ The pipeline (`scripts/`, ~600 lines of Python) runs in five stages:
    harmonise fuel labels, apply the documented filters, and write the panel plus
    a machine-readable QC record (`data/processed/qc.json`).
 3. **`analyse`** - compute the four geographic views.
-4. **`figures`** / **`wireframe`** - render.
+4. **`figures`** - render the figures directly from the panel, so that no number
+   in this report is transcribed by hand.
 
 Two methodological rules are applied throughout, because both guard against
 composition effects that would otherwise be mistaken for geography:
@@ -109,9 +111,10 @@ missing: `prezzo` parses for every remaining row. The retained distribution is
 well-behaved, with pronounced spikes at round numbers (1.700, 1.800, 1.900) that
 are a genuine pricing behaviour rather than a defect.
 
-For context, the *live* feed downloaded on 2026-08-04 carries values of 0.100
-and 8.888 - placeholders rather than prices. The band is set to catch exactly
-these without touching any real fuel price.
+For context, the *live* feed downloaded on 2026-08-06 carries nine such values,
+among them 0.100 (four stations) and 8.888 (two) - placeholders rather than
+prices. The band is set to catch exactly these without touching any real fuel
+price.
 
 ![Price plausibility and the age of quotes.](../figures/02_quality.png)
 
@@ -121,27 +124,33 @@ Operators are required to report price *changes*, not to reconfirm unchanged
 prices, so an old `dtComu` is **not by itself evidence of a stale record**. We
 therefore flag at 60 days and drop only beyond 365.
 
-In this window the filter never fires. Median quote age is **1 day**, the 95th
-percentile 6 days, and the maximum **61 days**. No row is older than that.
+In the considered window the **drop** threshold never fires: no quote is anywhere near a year old, so not one row is removed for staleness. The **flag** does fire, but
+barely - median quote age is **1 day**, the 99th percentile 13 days, and the
+oldest quote in the panel is **61 days**, so **26 rows (0.001%)** cross the
+60-day line. They are marked, not dropped.
 
-That cleanliness is a property of *this window*, not of the dataset:
+That freshness is a property of *the considered window*, not of the dataset. The
+same measurement on an extract from March 2022 gives a different picture; since
+the two differ greatly in size, the last column gives the share as well as the
+count:
 
-| Extract | max age | 99th pct | rows > 60 d |
-|---|---|---|---|
-| Archive, 2022-03-17 | 568 d | 453 d | 6,201 |
-| Archive, 2024–2025 (this panel) | 61 d | 13 d | 0 |
-| Live feed, 2026-08-04 | 4,821 d | 19 d | 235 |
+\needspace{7\baselineskip}
 
-MIMIT's retention behaviour evidently changed between 2022 and 2024, and the
-live feed behaves differently again. **Any project spanning the full archive
-would have to model this discontinuity;** scoping to 2024–2025 avoids it, and
-that is part of why the window was chosen.
+| Extract | rows | median | 99th pct | max age | > 60 d |
+|:---------------------|----------:|------:|--------:|-------:|-------------:|
+| Archive, 2022-03-17 | 95,104 | 6 d | 453 d | 568 d | 6,201 (6.52%) |
+| This panel, 2024–2025 | 2,000,810 | 1 d | 13 d | 61 d | 26 (0.001%) |
 
-One caveat: the age comparison must be made date-to-date, not
-timestamp-to-timestamp. The 08:00 extract carries quotes filed up to 08:15 the
-same morning, so a naive comparison against midnight scores 43% of rows as
-"filed in the future". This was an early bug in our pipeline, caught because the
-implied exclusion rate was implausible.
+The first row is a single national day; the second is the whole panel, 105
+Mondays of Nord-Est prices.
+
+The two behave like different datasets. In 2022 a fifteenth of all quotes were
+over two months old and the 99th percentile sat beyond a year, so staleness was
+a genuine problem an analysis had to handle. By 2024 that tail has gone: the
+same threshold catches 26 rows in two million. MIMIT's retention behaviour
+changed somewhere between the two. **Any project spanning the full archive would
+have to model that discontinuity;** scoping to 2024–2025 avoids it, and that is
+part of why the window was chosen.
 
 ### 5.4 Fuel labels: the main semantic problem
 
@@ -173,18 +182,19 @@ incompatibility rather than a quality failure.
 ### 5.5 Registry quality
 
 - **Embedded separators.** 34 rows across the eight snapshots carry a stray `;`
-  inside the station name or address. Because `idImpianto` is always first and
-  the coordinates always last, these are *recoverable* by anchoring from both
-  ends; we repair them rather than drop them. **Zero rows are unrecoverable.**
+  inside a free-text field, so they split into 11 or 12 pieces instead of 10.
+  They are *recoverable* rather than droppable, because three positions in the
+  row can be trusted: `idImpianto` is always first, the coordinates are always
+  last, and `Tipo Impianto` is a two-value controlled vocabulary. We repair them
+  rather than drop them; **zero rows are unrecoverable.** The surplus pieces are
+  rejoined with `;`, the exact inverse of the split, so the repaired field is
+  the ministry's original text rather than an approximation of it.
 - **Geocoding.** Only **10 stations (0.19%)** have coordinates that fall outside
   a Nord-Est bounding box or sit at (0,0). They are excluded from spatial views.
 - **Churn.** 4,267 of 5,329 stations appear in all eight snapshots; 225 appear in
   only one. Because a single snapshot cannot resolve every id, the registry is
   built as a union across snapshots - using only the latest snapshot would have
   silently dropped historical stations.
-- **Rebranding.** 58 stations change `Bandiera` during the period. Brand is
-  therefore a property of the *latest* record, and brand-level comparisons
-  should be read with that in mind.
 
 ### 5.6 Exclusion ledger
 
@@ -199,72 +209,103 @@ incompatibility rather than a quality failure.
 | Quote older than 365 days | 0 | 0.000 |
 | **Retained** | **2,000,810** | **97.14** |
 
+### 5.7 Why the window stops at 2024–2025
+
+The archive reaches back to 2015. Restricting to two years is partly a matter of
+proportion - the question is geographic, so daily resolution over a decade adds
+volume rather than evidence - but the decisive reasons are properties of the
+older data, each checked against a 2022 file and archive held for comparison.
+
+- **The retention regime changes (§5.3).** Maximum quote age is 61 days in
+  2024–2025, 568 days in the March 2022 extract. Pooling the two would mix
+  populations whose staleness differs by an order of magnitude.
+- **The archive layout changes.** 2022 quarterly archives store the daily CSVs
+  at the root; 2024–2025 archives nest them inside a `{year}_{q}_tr/` directory.
+  A loader written against one silently extracts nothing from the other.
+- **The fuel vocabulary is not stable.** The March 2022 file uses `SSP98`, a
+  label that never appears in 2024–2025. Because harmonisation is a strict
+  lookup that raises on anything unrecognised (§5.4), every extra year of
+  history costs another pass of manual label triage - and an unnoticed one
+  would silently drop a product from a station's price list.
+- **Daily completeness is better.** 2022 Q1 is missing two consecutive days
+  (15–16 March) out of 90. Across all of 2024–2025 exactly one day is absent
+  from the archive, Saturday 2025-01-11 - and being a Saturday it does not touch
+  the Monday sample, which is why all 105 expected weeks are present (§5.1).
+
+None of this makes the earlier data unusable. It means a longer window is a
+different project, with a discontinuity to model rather than a panel to
+describe, and the two years chosen are the ones that behave consistently.
+
 ## 6. Exploratory analysis
 
-The panel covers 5,008 geolocated stations that reported at least once - 101 of
-them on the motorway. Composition: Veneto 2,241 stations, Emilia-Romagna 2,065,
-Friuli-Venezia Giulia 587, Trentino-Alto Adige 436; by brand, Eni 1,153,
-IP 751, unbranded *pompe bianche* 622, Q8 562, Esso 496, Tamoil 324, Shell 26,
-and 1,395 others.
+Exploration had one job: establish whether this panel can carry the intended
+visualization, and identify the properties that constrain how it must be built.
+All results below use **standard self-service grades** unless stated otherwise.
 
-All figures below use **standard self-service grades**, the products nearly
-every station sells and therefore the only ones comparable across 5,000 pumps.
+### 6.1 Panel composition: how much data sits in each cell
 
-### 6.1 Between provinces
+Of 5,329 registered stations, **5,018 report at least once** and 5,008 of those
+also carry usable coordinates. They divide unevenly:
 
-Mean self-service petrol ranges from **€1.745 in Rovigo to €1.833 in Bolzano** -
-a spread of **8.8 cents**. Diesel behaves similarly (€1.660 to €1.758, 9.8
-cents). The pattern is coherent rather than noisy: Alpine and border provinces
-(BZ, TN, TS, GO) are dear, the Po plain (RO, TV, PD, FE) is cheap.
+| Region | Reporting stations | | Product | Rows retained |
+|---|---:|---|---|---:|
+| Veneto | 2,109 | | Petrol | 689,555 |
+| Emilia-Romagna | 1,930 | | Diesel | 683,971 |
+| Friuli-Venezia Giulia | 555 | | Diesel (premium) | 313,321 |
+| Trentino-Alto Adige | 424 | | LPG | 121,196 |
+| | | | Petrol (premium) | 102,031 |
+| *of which motorway* | *101* | | HVO | 71,491 |
+| | | | Diesel (winter grade) | 19,245 |
 
-![Provincial deviation from the Nord-Est mean.](../figures/04_choropleth.png)
+Per province the station count runs from **40 (Trieste)** and 53 (Gorizia) to
+**392 (Verona)**, median 195. Standard petrol and diesel are the only two
+products stocked at nearly every station, and therefore the only two comparable
+across 5,000 pumps; the remainder are too unevenly distributed to map.
 
-### 6.2 Motorway
+Three consequences for the design follow directly:
 
-The motorway premium averages **10.4 cents** for petrol and **11.6** for diesel,
-and never closes: the weekly minimum across two years is 7.4 cents. The two
-populations are almost disjoint in the distribution plot. Note the small sample
-- 101 reporting motorway stations against ~4,900 ordinary - which is why medians
-are used throughout.
+1. **A province × motorway breakdown is not supportable.** 101 motorway stations
+   across 22 provinces is under five per province, and several provinces have
+   none. Motorway can only be a Nord-Est-level comparison.
+2. **Per-province views must expose their sample size.** A price distribution
+   for Trieste rests on 40 pumps against Verona's 392; drawn identically, the
+   two would imply equal confidence.
+3. **Unbalanced comparisons need medians.** With 101 stations against ~4,900, a
+   handful of outlying motorway sites would otherwise drive the result.
 
-![The motorway premium, and the two price populations.](../figures/05_motorway.png)
+### 6.2 The intended comparisons are separable in this data
 
-### 6.3 Within provinces - the result that reframes the question
+| Comparison | Gap | Measured over |
+|:---------------------------|--------:|:------------------------------------------|
+| Attended vs self-service | 13.0 c/L | 240,347 paired station-weeks, 2,785 stations |
+| Motorway vs ordinary road | 10.4 c/L | 101 vs ~4,900 stations, weekly medians |
+| Spread within a province-week | 9.1 c/L | p10–p90, 22 provinces × 105 weeks |
+| Cheapest vs dearest province | 8.8 c/L | RO €1.745 to BZ €1.833 |
 
-Within a single province and a single week, the 10th–90th percentile of station
-prices spans **9.1 cents on average** - *as wide as the entire 8.8-cent range
-between the cheapest and dearest province*. Bologna is the most dispersed
-(11.8c), Bolzano the least (6.0c): Bolzano is uniformly expensive, whereas
-Bologna contains both cheap and dear pumps.
+Each is large relative to week-to-week movement and stable across the two years
+- the motorway premium, for instance, never falls below 7.8 cents in any of the
+105 weeks, and the provincial ordering is coherent rather than noisy (Alpine and
+border provinces dear, the Po plain cheap). Diesel behaves like petrol
+throughout: an 11.6-cent motorway premium and a 9.8-cent provincial range. The
+question is answerable with this data, and the answer does not depend on which
+of the two headline fuels is chosen.
 
-The consequence for the visualization is direct. A choropleth alone would leave
-the reader with "my province is expensive"; the data supports "my province
-contains both the cheapest and the dearest pump I could reach", which is both
-more accurate and more actionable.
+### 6.3 Two distributional properties the visualization must respect
 
-![Within-province dispersion.](../figures/06_dispersion.png)
+Stations fall into two camps on attended service, so **the average describes almost none of them**. At **32% of paired station-weeks the two prices are identical** - those stations charge nothing extra for attended service. The rest charge **19.0 cents** more on average. The overall figure of 13.0 cents sits in the gap between the two groups and describes neither, so this comparison needs to be drawn as **a distribution rather than a single bar**.
 
-### 6.4 Attended versus self-service
+**Within-province spread is as wide as the between-province range.** Inside a
+single province in a single week, the 10th–90th percentile of station prices
+spans **9.1 cents** on average, against **8.8 cents** between the cheapest and
+dearest province. Bologna is the most dispersed (11.8c), Bolzano the least
+(6.0c) - Bolzano is uniformly expensive, whereas Bologna contains both cheap and
+dear pumps.
 
-Measured within station and week, across **240,347 paired station-weeks at 2,785
-stations**, attended service costs **13.0 cents** more on average - larger than
-any other gap in the study.
-
-That mean, however, describes almost no real station. The distribution is
-strongly **bimodal**: **32% of paired station-weeks show no differential at
-all**, while among those that do the gap averages **19.0 cents**. Roughly 30% of
-stations never differentiate. Reporting only the mean would misrepresent both
-groups, so the figure shows the shape.
-
-![The attended-service premium.](../figures/07_service.png)
-
-### 6.5 Synthesis
-
-![The four gaps on one scale.](../figures/08_synthesis.png){width=80%}
-
-Ordered by size, the four gaps a driver faces are: attended service 13.0c,
-motorway 10.4c, within-province spread 9.1c, and between-province range 8.8c.
-**Geography matters least.**
+This is the most consequential thing the exploration turned up. A choropleth on
+its own would leave a reader with "my province is expensive", when the data
+supports "my province contains both the cheapest and the dearest pump I could
+reach". **A map alone cannot carry this dataset**; a within-province view has to
+sit beside it.
 
 ## 7. Limitations
 
@@ -278,8 +319,6 @@ motorway 10.4c, within-province spread 9.1c, and between-province range 8.8c.
    actually pays.
 4. **Weekly Monday sampling** is appropriate for a geographic question but
    would be inadequate for a dynamic one.
-5. **Brand is time-collapsed** to the latest snapshot, affecting the 58
-   rebranded stations.
 6. **The clean age profile does not generalise** beyond 2024–2025 (§5.3).
 
 ## 8. Reproducibility
@@ -288,14 +327,13 @@ motorway 10.4c, within-province spread 9.1c, and between-province range 8.8c.
 scripts/config.py       scope, paths, thresholds
 scripts/fuels.py        59 labels -> 9 products; per-kg products flagged
 scripts/geo.py          registry parsing, repair, geocode QC, boundaries
-scripts/build_panel.py  105 weekly files -> panel + qc.json      (~95 s)
+scripts/build_panel.py  105 weekly files -> panel + qc.json
 scripts/analyse.py      the four geographic views
-scripts/figures.py      figures 01-08
-scripts/wireframe.py    figure 09
+scripts/figures.py      the figures in this report
 ```
 
-Running `build_panel.py`, `analyse.py`, `figures.py` and `wireframe.py` in that
-order regenerates every number and figure in this report from the raw CSVs.
+Running `build_panel.py`, `analyse.py` and `figures.py` in that order
+regenerates every number and figure in this report from the raw CSVs.
 Every threshold is a named constant in `config.py`; every exclusion is counted
 into `data/processed/qc.json` rather than applied silently. Environment: Python
 3.12, pandas 3.0.5, matplotlib 3.11.1, numpy 2.5.1, pyarrow 25.0.0.

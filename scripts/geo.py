@@ -21,25 +21,48 @@ _BRAND_MAP = {
 }
 
 
+TIPI = {"stradale", "autostradale"}
+
+
 def _split_registry_line(line):
     """Split one registry row, tolerating separators inside free-text fields.
 
     The registry is semicolon-delimited, but ~0.1% of rows carry a stray ';'
-    inside the station name or address. Those rows are recoverable rather than
-    droppable: the id is always first and the coordinates always last, so the
-    surplus can only have come from the two free-text fields in the middle.
+    inside a free-text field. Those rows are recoverable rather than droppable,
+    because three positions in the row are trustworthy: the id is always first,
+    the coordinates are always last, and `TipoImpianto` is a two-value
+    controlled vocabulary that free text never collides with.
+
+    Anchoring on `TipoImpianto` rather than on position matters. One row in the
+    registry carries a surplus *empty* field before the brand:
+
+        15373;"METIS ... S.A.S.";;Agip Eni;Stradale;...;PR;44.84;10.23
+
+    Counting four in from the left puts the brand in `TipoImpianto` and leaves
+    `Bandiera` empty. The row is the right length, splits without complaint, and
+    is silently wrong. Locating `Stradale` first assigns every field correctly.
+
+    Surplus separators are rejoined with ';', which is exactly the inverse of
+    the split, so the reconstructed field is the ministry's original text.
     """
     f = line.rstrip("\n").split(";")
-    if len(f) == len(REG_COLS):
+    if len(f) == len(REG_COLS) and f[3].strip().casefold() in TIPI:
         return f
-    if len(f) > len(REG_COLS):
-        # id, Gestore, Bandiera, Tipo | <free text absorbs the surplus> |
-        # Comune, Provincia, Lat, Lon
-        head, tail = f[:4], f[-4:]
-        middle = f[4:-4]
-        name, addr = middle[0], " ".join(middle[1:])
-        return head + [name, addr] + tail
-    return None
+
+    if len(f) < len(REG_COLS):
+        return None
+
+    # Comune, Provincia, Lat, Lon are fixed at the end; the id is fixed at the
+    # start. Between them sit Gestore, Bandiera, TipoImpianto, Nome, Indirizzo.
+    tail, middle = f[-4:], f[1:-4]
+    k = next((i for i, v in enumerate(middle) if v.strip().casefold() in TIPI), None)
+    if k is None or k < 2 or len(middle) - k < 3:
+        return None  # no usable anchor: report rather than guess
+
+    left, right = middle[:k], middle[k + 1:]
+    gestore, bandiera = ";".join(left[:-1]), left[-1]
+    nome, indirizzo = right[0], ";".join(right[1:])
+    return [f[0], gestore, bandiera, middle[k], nome, indirizzo] + tail
 
 
 def load_registry():
@@ -80,6 +103,17 @@ def load_registry():
 
     reg = reg.dropna(subset=["idImpianto"])
     reg["idImpianto"] = reg["idImpianto"].astype("int64")
+
+    # A row can be the right length and still be wrong, so the split is checked
+    # against the one field with a controlled vocabulary. Anything else here
+    # means a new malformation the parser has not been taught to read.
+    bad = reg.loc[~reg["TipoImpianto"].str.strip().str.casefold().isin(TIPI),
+                  "TipoImpianto"]
+    if not bad.empty:
+        raise ValueError(
+            f"{len(bad)} rows carry an unrecognised TipoImpianto "
+            f"({sorted(bad.unique())[:5]}); the row split is unreliable."
+        )
 
     ne = reg[reg["Provincia"].isin(config.NE_PROVINCES)].copy()
     ne["regione"] = ne["Provincia"].map(config.NE_PROVINCES)
