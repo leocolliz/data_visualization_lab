@@ -63,13 +63,11 @@ preamble, delimiter `;`, ten fields: `idImpianto`, `Gestore`, `Bandiera`,
 `Latitudine`, `Longitudine`. `Tipo Impianto` takes two values, `Stradale` or
 `Autostradale` - a controlled vocabulary the parser relies on (§5.5).
 
-A national daily file holds ~93,000 price rows across ~24,000 stations. Even thought registry are published everyday with the prices file, since the number of stations is not often changing eight
-registry snapshots were taken, one per quarter, growing from 22,821 to 24,462
-national rows over the two years.
+Although the registry is published every day alongside the price file, the station population changes relatively slowly. We therefore retained eight registry snapshots, one per quarter. The number of national registry records increased from 22,821 to 24,462 over the two-year period.
 
 ## 4. Construction of the analysis panel
 
-The pipeline (`scripts/`, ~600 lines of Python) runs in five stages:
+The pipeline (`scripts/`, ~600 lines of Python) runs in four stages:
 
 1. **`geo.load_registry`** - parse all eight snapshots, restrict to Nord-Est,
    derive region, motorway flag, harmonised brand, and a geocode validity flag;
@@ -78,8 +76,9 @@ The pipeline (`scripts/`, ~600 lines of Python) runs in five stages:
    harmonise fuel labels, apply the documented filters, and write the panel plus
    a machine-readable QC record (`data/processed/qc.json`).
 3. **`analyse`** - compute the four geographic views.
-4. **`figures`** - render the figures directly from the panel, so that no number
-   in this report is transcribed by hand.
+4. **`figures`** - render the figures directly from the processed panel, 
+   quality-control records and aggregates produced by analyse, 
+   so that no number in this report is transcribed by hand.
 
 Two methodological rules are applied throughout, because both guard against
 composition effects that would otherwise be mistaken for geography:
@@ -94,7 +93,7 @@ composition effects that would otherwise be mistaken for geography:
 
 ### 5.1 Coverage
 
-All 105 expected Mondays are present; none is missing. Between 4,301 and 4,439
+All 105 expected Mondays are present; none is missing. Between 4,251 and 4,384
 Nord-Est stations post at least one price in any given week, out of 5,329
 registered. Over the whole period **5,018 stations report at least once**, so
 **311 registered stations (5.8%) are never observed quoting a price** - they are
@@ -147,8 +146,7 @@ Mondays of Nord-Est prices.
 The two behave like different datasets. In 2022 a fifteenth of all quotes were
 over two months old and the 99th percentile sat beyond a year, so staleness was
 a genuine problem an analysis had to handle. By 2024 that tail has gone: the
-same threshold catches 26 rows in two million. MIMIT's retention behaviour
-changed somewhere between the two. **Any project spanning the full archive would
+same threshold catches 26 rows in two million. **Any project spanning the full archive would
 have to model that discontinuity;** scoping to 2024–2025 avoids it, and that is
 part of why the window was chosen.
 
@@ -190,7 +188,7 @@ incompatibility rather than a quality failure.
   rejoined with `;`, the exact inverse of the split, so the repaired field is
   the ministry's original text rather than an approximation of it.
 - **Geocoding.** Only **10 stations (0.19%)** have coordinates that fall outside
-  a Nord-Est bounding box or sit at (0,0). They are excluded from spatial views.
+  a Nord-Est bounding box or sit at (0,0).
 - **Churn.** 4,267 of 5,329 stations appear in all eight snapshots; 225 appear in
   only one. Because a single snapshot cannot resolve every id, the registry is
   built as a union across snapshots - using only the latest snapshot would have
@@ -222,11 +220,7 @@ older data, each checked against a 2022 file and archive held for comparison.
 - **The archive layout changes.** 2022 quarterly archives store the daily CSVs
   at the root; 2024–2025 archives nest them inside a `{year}_{q}_tr/` directory.
   A loader written against one silently extracts nothing from the other.
-- **The fuel vocabulary is not stable.** The March 2022 file uses `SSP98`, a
-  label that never appears in 2024–2025. Because harmonisation is a strict
-  lookup that raises on anything unrecognised (§5.4), every extra year of
-  history costs another pass of manual label triage - and an unnoticed one
-  would silently drop a product from a station's price list.
+- **The fuel vocabulary is not stable.** The March 2022 file uses `SSP98`, a label that never appears in 2024–2025. Because harmonisation uses a strict lookup table, every additional year requires a new pass of manual label review. Unrecognised labels are recorded in the quality-control output and excluded until an explicit mapping is provided.
 - **Daily completeness is better.** 2022 Q1 is missing two consecutive days
   (15–16 March) out of 90. Across all of 2024–2025 exactly one day is absent
   from the archive, Saturday 2025-01-11 - and being a Saturday it does not touch
@@ -292,7 +286,7 @@ of the two headline fuels is chosen.
 
 ### 6.3 Two distributional properties the visualization must respect
 
-Stations fall into two camps on attended service, so **the average describes almost none of them**. At **32% of paired station-weeks the two prices are identical** - those stations charge nothing extra for attended service. The rest charge **19.0 cents** more on average. The overall figure of 13.0 cents sits in the gap between the two groups and describes neither, so this comparison needs to be drawn as **a distribution rather than a single bar**.
+Stations fall into two camps on attended service, so **the average describes almost none of them**. At **In 32% of paired station-weeks, the two prices differ by less than 0.5 cents per litre** and are treated as effectively identical. The rest charge **19.0 cents** more on average. The overall figure of 13.0 cents sits in the gap between the two groups and describes neither, so this comparison needs to be drawn as **a distribution rather than a single bar**.
 
 **Within-province spread is as wide as the between-province range.** Inside a
 single province in a single week, the 10th–90th percentile of station prices
@@ -336,4 +330,4 @@ Running `build_panel.py`, `analyse.py` and `figures.py` in that order
 regenerates every number and figure in this report from the raw CSVs.
 Every threshold is a named constant in `config.py`; every exclusion is counted
 into `data/processed/qc.json` rather than applied silently. Environment: Python
-3.12, pandas 3.0.5, matplotlib 3.11.1, numpy 2.5.1, pyarrow 25.0.0.
+3.12, pandas 3.0.5, matplotlib 3.11.1, numpy 2.5.1, pyarrow 24.0.0.
