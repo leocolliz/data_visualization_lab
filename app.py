@@ -112,7 +112,6 @@ PAGES = [
     "Motorway vs ordinary road",
     "Attended vs self-service",
     "Data quality",
-    "Method and downloads",
 ]
 
 # Both hues are the report's, and the pair is the one validated in style.py:
@@ -125,9 +124,6 @@ ABOVE_HUE = "#e34948"  # dearer — the warm pole of style.DIVERGING
 
 BAND_HUE = style.SEQ[2]  # the 10th–90th percentile band, as in figure 06
 MEDIAN_HUE = style.SEQ[7]  # the provincial median, the dark step of one hue
-
-SAMPLE_WEEKDAY_NAME = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
-                       "Saturday", "Sunday"][config.SAMPLE_WEEKDAY]
 
 
 # -----------------------------------------------------------------------------
@@ -535,11 +531,20 @@ page = st.sidebar.radio("View", PAGES, key="page")
 st.sidebar.divider()
 st.sidebar.subheader("Controls")
 
+# The quality page describes the dataset itself, not a slice of it: its figures
+# are drawn from the whole panel, over all weeks, across every fuel and
+# province. Leaving the controls live there would offer a choice that changes
+# nothing on screen. Disabled rather than hidden, so the panel does not appear
+# to lose controls on one page and grow them back on the next; the values are
+# held in session_state and are still there when another view is selected.
+frozen = page == "Data quality"
+
 # Every widget carries an explicit key, so its value survives reruns and page
 # switches in st.session_state under a name we chose rather than a generated one.
 product = st.sidebar.radio(
     "Fuel", fuels.HEADLINE,
     format_func=lambda p: fuels.DISPLAY[p], horizontal=True, key="product",
+    disabled=frozen,
 )
 
 weeks = get_weeks()
@@ -550,15 +555,20 @@ weeks = get_weeks()
 first, last = st.sidebar.select_slider(
     "Weeks observed", options=weeks, value=(weeks[0], weeks[-1]),
     format_func=lambda d: d.strftime("%d %b %Y"), key="window",
+    disabled=frozen,
 )
 
 PROVINCES = sorted(config.NE_PROVINCES)
 home = st.sidebar.selectbox(
     "Your province", PROVINCES, index=PROVINCES.index("BO"),
     format_func=lambda p: f"{p} · {config.NE_PROVINCES[p]}", key="home",
+    disabled=frozen,
 )
 
 st.sidebar.caption(
+    "These describe the published dataset as a whole, so the controls do not "
+    "apply here. Your selections are kept for the other views."
+    if frozen else
     "The Nord-Est baseline always uses all 22 provinces: your province changes "
     "what is highlighted and summarised, never what the comparison is against."
 )
@@ -569,6 +579,11 @@ D = figure_data(views, first, last)
 
 st.title("Where You Refuel")
 st.caption(
+    # With the controls frozen, a caption naming the fuel and the window would
+    # describe a selection this page does not honour.
+    f"Every fuel, every station · all {len(weeks)} weeks "
+    f"({weeks[0]:%d %b %Y} – {weeks[-1]:%d %b %Y})"
+    if frozen else
     f"{fuels.DISPLAY[product]}, self-service · {n_weeks} of {len(weeks)} weeks "
     f"({first:%d %b %Y} – {last:%d %b %Y}) · {views['n_stations']:,} stations · "
     f"{views['n_rows']:,} posted prices"
@@ -896,74 +911,6 @@ elif page == "Data quality":
 
     with st.expander("The full quality-control record (qc.json)"):
         st.json(qc)
-
-
-# -----------------------------------------------------------------------------
-# 7. Method and downloads
-# -----------------------------------------------------------------------------
-
-elif page == "Method and downloads":
-    st.subheader("What this app computes")
-    st.markdown(
-        f"""
-        Scope: the {len(config.NE_PROVINCES)} provinces of ISTAT NUTS-1 *Nord-Est*,
-        {config.START:%d %b %Y} to {config.END:%d %b %Y}, one observation day per
-        week ({SAMPLE_WEEKDAY_NAME}). The map question needs breadth of stations,
-        not daily resolution, so weekly sampling costs nothing here.
-
-        Two rules hold in every view, because both guard against composition
-        effects that would otherwise masquerade as geography:
-
-        1. Statistics are computed **within a week** and then averaged across
-           weeks, so a province that reports more often during expensive weeks
-           does not look expensive.
-        2. Paired comparisons are made **within a station**, so the attended gap
-           is a service premium rather than a difference in which stations offer
-           what.
-
-        Quality thresholds, all named constants in `scripts/config.py`: posted
-        prices outside €{config.PRICE_MIN}–{config.PRICE_MAX}/litre are treated as
-        data-entry errors; quotes are flagged at {config.STALE_FLAG_DAYS} days and
-        dropped only past {config.STALE_DROP_DAYS}, because operators must report
-        price *changes*, not reconfirm unchanged prices.
-
-        Prices are *posted* and self-reported, not transaction prices, and are not
-        weighted by volume sold. Methane, LNG and L-GNC are priced per kilogram and
-        appear in no EUR/litre view. See §7 of the technical report for the full
-        limitations.
-        """
-    )
-
-    st.subheader("How the app relates to the report")
-    st.markdown(
-        "The figures here are the report's own builders in `scripts/figures.py`, "
-        "fed the aggregates of `scripts/analyse.py` recomputed over the window you "
-        "chose. At the full range they reproduce `figures/01`–`08` exactly. The "
-        "app never re-implements a statistic."
-    )
-
-    st.subheader("Downloads for this window")
-    st.caption(f"{first:%d %b %Y} – {last:%d %b %Y}, {n_weeks} weeks.")
-    for label, key, name in [
-        ("Provincial means and deviations", "dev", "province_deviation"),
-        ("Within-province dispersion", "disp", "dispersion"),
-        ("Motorway premium, weekly", "mw", "motorway_weekly"),
-        ("Attended-service gap", "svc", "service_gap"),
-    ]:
-        st.download_button(
-            f"{label} (CSV)",
-            views[key].to_csv(index=False).encode("utf-8"),
-            file_name=f"{name}_{first:%Y%m%d}_{last:%Y%m%d}.csv",
-            mime="text/csv", key=f"dl::{key}",
-        )
-
-    st.subheader("Source")
-    st.markdown(
-        "MIMIT *Osservaprezzi Carburanti* (IODL 2.0) — daily posted prices for "
-        "every Italian fuel station, plus the station registry, from "
-        "<https://www.mimit.gov.it/it/open-data/elenco-dataset/carburanti-archivio-prezzi>. "
-        "Province boundaries from openpolis/geojson-italy (CC-BY)."
-    )
 
 
 st.divider()
