@@ -27,8 +27,11 @@ their date range (`st.cache_data`).
 
 from __future__ import annotations
 
+import base64
+import html
 import io
 import json
+import struct
 import sys
 from datetime import date
 from pathlib import Path
@@ -57,6 +60,50 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# The full-screen figure overlay (see `zoomable`). Injected once per rerun,
+# before anything that uses it. The overlay sits above Streamlit's own header,
+# which is why the z-index is well clear of the 999990 the header uses.
+ZOOM_CSS = """<style>
+/* This block is delivered inside a markdown element, which would otherwise
+   leave an empty element's worth of gap at the top of the page. A `<style>`
+   still applies from inside a hidden parent. Matched by descendant rather than
+   by an exact path: Streamlit's wrapper depth is not ours to depend on. */
+.stMarkdown:has(style) { display: none; }
+.zoomfig { width: 100%; }
+.zoomfig-slot { position: relative; width: 100%; height: 100%; }
+.zoomfig-slot img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.zoomfig-open { position: absolute; inset: 0; cursor: zoom-in; }
+.zoomfig-open::after {
+    content: "\\2921"; position: absolute; top: .45rem; right: .45rem;
+    padding: .1rem .38rem; border-radius: 4px; line-height: 1.35;
+    font-size: .95rem; color: #fcfcfb; background: rgba(32,35,42,.72);
+    opacity: 0; transition: opacity .12s ease-in-out;
+}
+.zoomfig-slot:hover .zoomfig-open::after { opacity: 1; }
+.zoomfig-shut { display: none; }
+
+.zoomfig-slot:target {
+    position: fixed; inset: 0; z-index: 1000001; padding: 2.2rem;
+    background: rgba(18,20,24,.93);
+    display: flex; align-items: center; justify-content: center;
+}
+.zoomfig-slot:target img {
+    position: relative; z-index: 1; width: auto; height: auto;
+    max-width: 100%; max-height: 100%; border-radius: 6px;
+    box-shadow: 0 18px 60px rgba(0,0,0,.55);
+}
+.zoomfig-slot:target .zoomfig-open { display: none; }
+/* Click anywhere off the figure to close; the glyph says so out loud. */
+.zoomfig-slot:target .zoomfig-shut { display: block; position: fixed; inset: 0; cursor: zoom-out; }
+.zoomfig-slot:target .zoomfig-shut::after {
+    content: "\\2715"; position: fixed; top: .9rem; right: 1.4rem;
+    font-size: 1.5rem; line-height: 1; color: #fcfcfb; opacity: .85;
+}
+@media (prefers-reduced-motion: reduce) {
+    .zoomfig-open::after { transition: none; }
+}
+</style>"""
 
 PAGES = [
     "The four gaps",
@@ -96,7 +143,7 @@ NEEDED = {
 
 
 def stop_if_data_missing() -> None:
-    """The repo ships code, not data: 856 MB of MIMIT extracts are gitignored."""
+    """The repo ships code, not data: ~430 MB of MIMIT extracts are gitignored."""
     missing = {p: what for p, what in NEEDED.items() if not p.exists()}
     if not missing:
         return
@@ -107,10 +154,12 @@ def stop_if_data_missing() -> None:
     st.markdown("\n".join(f"- `{p.relative_to(ROOT)}` — {what}"
                           for p, what in missing.items()))
     st.markdown(
-        "The raw MIMIT extracts are not in the repository. Put them under "
-        "`data/raw/` as the README describes, then build the panel:"
+        "The raw MIMIT extracts are not in the repository. Download them, then "
+        "build the panel — the first step is safe to repeat, it keeps whatever "
+        "is already on disk:"
     )
     st.code(
+        "python scripts/fetch_data.py    # raw extracts -> data/raw/ (~1.3 GB down)\n"
         "python scripts/build_panel.py   # 105 weekly CSVs -> panel + qc.json (~95 s)\n"
         "python scripts/analyse.py       # the four geographic views\n"
         "python scripts/figures.py       # figures 01-08",
@@ -327,16 +376,70 @@ def png_bytes(fig: plt.Figure) -> bytes:
     return buf.getvalue()
 
 
+def png_size(png: bytes) -> tuple[int, int]:
+    """Pixel width and height, read from the PNG's IHDR chunk.
+
+    Measuring the encoded file rather than trusting `fig.get_size_inches()`
+    keeps the reserved slot correct even if a figure is ever saved with
+    `bbox_inches="tight"`, which crops away part of the nominal canvas.
+    """
+    return struct.unpack(">II", png[16:24])
+
+
+def zoomable(png: bytes, *, alt: str, slot: str) -> None:
+    """A figure that opens full-screen when clicked.
+
+    A chart drawn 700 px wide is a chart with unreadable tick labels, so every
+    figure has to be openable at full size. This is the CSS `:target`
+    idiom rather than a script: `st.markdown` strips `<script>`, and the usual
+    way around that — a component iframe reaching into `window.parent` — breaks
+    whenever Streamlit changes its DOM. Clicking the overlay link puts
+    `#{slot}` in the address bar, `:target` matches, and the same `<img>` is
+    restyled to fill the viewport. No second copy of the payload is sent, the
+    browser Back button closes the overlay, and a rerun cannot desynchronise it
+    because the state lives in the URL rather than in the session.
+
+    The outer wrapper holds the figure's aspect ratio so that lifting the inner
+    element out of flow (`position: fixed`) does not collapse the page behind
+    the overlay and jump the scroll position.
+    """
+    w, h = png_size(png)
+    src = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
+    alt = html.escape(alt, quote=True)
+    st.markdown(
+        f'<div class="zoomfig" style="aspect-ratio:{w}/{h}">'
+        f'<div class="zoomfig-slot" id="{slot}">'
+        f'<a class="zoomfig-shut" href="#zoomfig-closed" aria-label="Close"></a>'
+        f'<img src="{src}" alt="{alt}">'
+        f'<a class="zoomfig-open" href="#{slot}" aria-label="Enlarge: {alt}"></a>'
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
 def show(fig: plt.Figure, *, filename: str) -> None:
     """Draw a report figure and offer the PNG, then let it go.
+
+    The PNG is encoded once and used twice, for the visible figure and for the
+    download, which is why this renders the bytes itself instead of calling
+    `st.pyplot` (that would draw the canvas a second time, and its own
+    full-screen button only appears on hover).
 
     Closing matters: this process serves many reruns, and matplotlib keeps every
     unclosed figure alive.
     """
-    st.pyplot(fig)
-    st.download_button("Download this figure (PNG)", png_bytes(fig),
-                       file_name=filename, mime="image/png", key=f"png::{filename}")
+    png = png_bytes(fig)
+    # The panels carry their own left-aligned titles, so the figure can describe
+    # itself to a screen reader instead of repeating a caption in a second place.
+    alt = " · ".join(t for ax in fig.axes if (t := ax.get_title(loc="left")))
     plt.close(fig)
+    # The id has to survive a rerun unchanged or an open figure would snap shut,
+    # and it has to be unique on the page or two figures would open together.
+    # The filename is already both: it names one figure of one fuel.
+    zoomable(png, alt=alt or filename,
+             slot="zoomfig-" + filename.removesuffix(".png").replace("_", "-"))
+    st.download_button("Download this figure (PNG)", png,
+                       file_name=filename, mime="image/png", key=f"png::{filename}")
 
 
 def table(df: pd.DataFrame, *, filename: str, column_config: dict | None = None) -> None:
@@ -421,6 +524,8 @@ def four_gaps(views: dict, product: str) -> pd.DataFrame:
 # -----------------------------------------------------------------------------
 
 stop_if_data_missing()
+
+st.markdown(ZOOM_CSS, unsafe_allow_html=True)
 
 st.sidebar.title("⛽ Where you refuel")
 st.sidebar.caption("The geography of pump prices in North-East Italy, 2024–2025.")
