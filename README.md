@@ -123,9 +123,10 @@ data/raw/    prices/ (105 weekly CSVs), registry/ (8 snapshots),
              provinces.geojson, quarterly .tar.gz archives if --keep-archives
 data/interim/    station table, price panel  (regenerated)
 data/processed/  aggregates + qc.json        (regenerated)
-figures/     01-09  (regenerated)
-reports/     deliverable 1 (proposal) and 2 (technical report), .md + .pdf
-_archive_20260805/   earlier three-act version of this project, superseded
+figures/     01-08 (figures.py), 09 wireframe (wireframe.py),
+             10-11 screenshots of the running app, taken by hand
+reports/     deliverables 1 (proposal), 2 (technical report) and
+             4 (final report), .md + .pdf
 ```
 
 ## Data
