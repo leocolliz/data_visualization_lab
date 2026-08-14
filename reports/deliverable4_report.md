@@ -142,9 +142,8 @@ solution, with the encodings proposed for them:
   the road type, so that no panel ever needs four categorical slots;
 - the **dumbbell** per province for attended versus self-service.
 
-The two methodological rules also survived, and are enforced in code: statistics
-are computed **within a week** and then averaged, and paired comparisons are made
-**within a station**. Both guard against composition effects that would otherwise
+Geographic price levels and dispersions are computed within each week and then averaged across weeks. The attended-service comparison is computed from paired station-week observations within the same station and product.
+Both guard against composition effects that would otherwise
 be mistaken for geography. The ideas we explicitly rejected in the proposal - a
 dual-axis chart, and a dot map of all 5,300 stations - stayed rejected.
 
