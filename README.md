@@ -18,7 +18,28 @@ Four gaps a driver faces, on the same scale (self-service petrol):
 Geography matters least: which pump you pick inside your own province costs you
 as much as living in the dearest province rather than the cheapest.
 
+## Which route to use
+
+| Host | Route |
+|:---|:---|
+| **Linux** | The `.venv` commands in the next three sections. This is what the project was developed and tested on. |
+| **Anything else** | [**Docker**](#docker). Same code, no local Python. |
+
+The local commands assume a Linux shell throughout: `python3 -m venv`, POSIX
+paths, and executables under `.venv/bin/`. Windows puts them in `.venv\Scripts\`
+instead, so those lines do not run there as written; macOS uses the same layout
+as Linux and should work, but we have not tested it. **If you are not on Linux,
+take the Docker route** - the image carries its own Python, pandas, matplotlib
+and fonts, so nothing but Docker needs to be installed.
+
+One exception: rebuilding the report PDFs needs `pandoc` and `xelatex` on the
+host. They are not in the image, because they are needed to write the reports
+rather than to run the project. The built PDFs are committed under `reports/`,
+so this only matters if you are editing them.
+
 ## Getting the data
+
+*Linux; on any other host see [Docker](#docker).*
 
 `data/` is gitignored, so a fresh clone has the code and none of the inputs.
 One command puts them back:
@@ -49,6 +70,8 @@ again. `--force` re-fetches regardless.
 
 ## Reproducing
 
+*Linux; on any other host see [Docker](#docker).*
+
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python scripts/fetch_data.py    # raw MIMIT extracts -> data/raw/
@@ -65,6 +88,9 @@ Every threshold is a named constant in `scripts/config.py`; every excluded row
 is counted into `data/processed/qc.json` rather than dropped silently.
 
 ## The interactive app
+
+*Linux; on any other host see [Docker](#docker), which serves the same app.*
+
 If you did not run the commands in the **Reproducing** section:
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
@@ -91,12 +117,24 @@ would put light-surface PNGs on a dark page rather than restyle them.
 
 ## Docker
 
+The route to use on any host that is not Linux, and a fine one on Linux too.
+Nothing but Docker has to be installed: the image carries Python 3.12 and the
+pinned versions of pandas, numpy, matplotlib, pyarrow and streamlit.
+
 ```bash
+docker compose build                      # once, and after any change under scripts/
 docker compose run --rm pipeline python scripts/fetch_data.py   # first time only
-docker compose up --build                 # the app on http://localhost:8501
+docker compose up                         # the app on http://localhost:8501
 docker compose run --rm pipeline          # rebuild panel, aggregates, figures
 docker compose down
 ```
+
+**Build first, and rebuild after editing code.** `compose run` reuses an
+existing image and does not rebuild it. It builds only when no image is there at
+all, so on a fresh clone the `build` line is redundant - and on a machine that
+has run this before, leaving it out silently executes the *previous* version of
+`scripts/`. `docker compose run --build ...` forces it for a single command;
+`up --build` does the same for the app.
 
 Both services are the same image; the pipeline one is behind a profile so
 `up` starts the app alone. `data/` is deliberately not baked in - ~430 MB of raw
