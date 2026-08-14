@@ -95,6 +95,13 @@ def dispersion(panel):
     For each province-week, the spread of station prices; then averaged over
     weeks. p90-p10 is reported alongside the IQR because the tails are the
     part a driver can actually act on: the cheapest pump in reach.
+
+    The two percentiles are kept, not just their difference. A band drawn as
+    `median +/- (p90-p10)/2` has the right *length* but the wrong endpoints
+    whenever the distribution is skewed around its median, which station prices
+    are: it comes out shifted by up to 1.8 cents. Averaging is linear, so
+    `mean(p90) - mean(p10)` equals `mean(p90 - p10)` exactly and keeping the
+    endpoints costs nothing in the width every other view reports.
     """
     out = []
     for product in fuels.HEADLINE:
@@ -104,15 +111,20 @@ def dispersion(panel):
         sw = (d.groupby(["date", "Provincia", "idImpianto"], observed=True)["prezzo"]
               .mean().reset_index())
         g = sw.groupby(["date", "Provincia"], observed=True)["prezzo"]
+        p10, p90 = g.quantile(0.10), g.quantile(0.90)
         wk = pd.DataFrame({
             "iqr": g.quantile(0.75) - g.quantile(0.25),
-            "p90_p10": g.quantile(0.90) - g.quantile(0.10),
+            "p10": p10,
+            "p90": p90,
+            "p90_p10": p90 - p10,
             "median": g.median(),
             "n": g.size(),
         }).reset_index()
         agg = wk.groupby("Provincia").agg(
             iqr_cents=("iqr", lambda s: s.mean() * CENTS),
             p90_p10_cents=("p90_p10", lambda s: s.mean() * CENTS),
+            p10_eur=("p10", "mean"),
+            p90_eur=("p90", "mean"),
             median_eur=("median", "mean"),
             n_stations=("n", "mean"),
         ).reset_index()

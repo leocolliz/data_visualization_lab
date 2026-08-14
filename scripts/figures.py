@@ -318,8 +318,10 @@ def fig_dispersion(D, product="benzina"):
 
     ax = axes[0]
     y = np.arange(len(disp))
-    half = disp["p90_p10_cents"] / 200.0  # half-width, in EUR
-    lo, hi = disp["median_eur"] - half, disp["median_eur"] + half
+    # The drawn percentiles, not median +/- half the spread: the two have the
+    # same length, but the second is shifted wherever the distribution is
+    # skewed around its median, and this panel is read off the axis.
+    lo, hi = disp["p10_eur"], disp["p90_eur"]
     ax.hlines(y, lo, hi, color=style.SEQ[2], lw=5, alpha=0.6)
     ax.plot(disp["median_eur"], y, "o", color=style.SEQ[7], ms=6, zorder=3)
     ax.set_yticks(y, disp.index)

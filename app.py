@@ -279,9 +279,11 @@ def dispersion_strip(disp: pd.DataFrame, stations: pd.DataFrame, home: str) -> i
     all 22 provinces into a third of its width. They are clipped rather than
     dropped, and the caller says how many.
     """
+    # The band is the drawn p10 and p90, matching figure 06. Reconstructing it
+    # as median +/- half the spread would keep the length and lose the position.
     band = disp.assign(
-        lo=disp["median_eur"] - disp["p90_p10_cents"] / 200,
-        hi=disp["median_eur"] + disp["p90_p10_cents"] / 200,
+        lo=disp["p10_eur"],
+        hi=disp["p90_eur"],
         kind=SUMMARY_LABEL,
     ).sort_values("median_eur")
     order = band["Provincia"].tolist()
@@ -308,6 +310,8 @@ def dispersion_strip(disp: pd.DataFrame, stations: pd.DataFrame, home: str) -> i
     band_tip = [
         alt.Tooltip("Provincia:N", title="Province"),
         alt.Tooltip("median_eur:Q", title="Median", format=".3f"),
+        alt.Tooltip("lo:Q", title="10th percentile", format=".3f"),
+        alt.Tooltip("hi:Q", title="90th percentile", format=".3f"),
         alt.Tooltip("p90_p10_cents:Q", title="p90 − p10 (cents)", format=".1f"),
         alt.Tooltip("n_stations:Q", title="Stations/week", format=".0f"),
     ]
@@ -764,12 +768,17 @@ elif page == "Within one province":
         )
 
     with tab_data:
+        # The percentiles are here as well as the spread, so this tab is a
+        # faithful fallback for the band above rather than only for its length.
         table(
             disp.sort_values("p90_p10_cents")[
-                ["Provincia", "median_eur", "iqr_cents", "p90_p10_cents", "n_stations"]],
+                ["Provincia", "p10_eur", "median_eur", "p90_eur",
+                 "iqr_cents", "p90_p10_cents", "n_stations"]],
             filename=f"dispersion_{product}.csv",
             column_config={
+                "p10_eur": st.column_config.NumberColumn("10th pct", format="€ %.3f"),
                 "median_eur": st.column_config.NumberColumn("Median price", format="€ %.3f"),
+                "p90_eur": st.column_config.NumberColumn("90th pct", format="€ %.3f"),
                 "iqr_cents": st.column_config.NumberColumn("IQR", format="%.1f c"),
                 "p90_p10_cents": st.column_config.NumberColumn("p90 − p10", format="%.1f c"),
                 "n_stations": st.column_config.NumberColumn("Stations/week", format="%.0f"),
